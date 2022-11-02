@@ -1,29 +1,32 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const { Client, Collection, GatewayIntentBits } = require('discord.js');
 const { token } = require('./config.json');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-});
+client.commands = new Collection();
+const commandsPath = path.join(__dirname, 'commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
+for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    const command = require(filePath);
+    client.commands.set(command.data.name, command);
+}
 
-    const { commandName } = interaction;
+const eventsPath = path.join(__dirname, 'events');
+const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
 
-    if (commandName === 'ping') {
-        await interaction.reply('Pong!');
-        console.log('Slash command "pong" used.');
+for (const file of eventFiles) {
+    const filePath = path.join(eventsPath, file);
+    const event = require(filePath);
+    if (event.once) {
+        client.once(event.name, (...args) => event.execute(...args));
     }
-    else if (commandName === 'server') {
-        await interaction.reply(`Server name: ${interaction.guild.name}\nTotal members: ${interaction.guild.memberCount}`);
-        console.log('Slash command "server" used.');
+    else {
+        client.on(event.name, (...args) => event.execute(...args));
     }
-    else if (commandName === 'user') {
-        await interaction.reply(`Your tag: ${interaction.user.tag}\nYour id: ${interaction.user.id}`);
-        console.log('Slash command "user" used.');
-    }
-});
+}
 
 client.login(token);
